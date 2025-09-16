@@ -8,7 +8,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 
-export class PaymentSesionDto {
+export class PaymentSessionDto {
   @IsString()
   currency: string;
 
@@ -17,6 +17,9 @@ export class PaymentSesionDto {
   @ValidateNested({ each: true })
   @Type(() => PaymentSessionItems)
   items: PaymentSessionItems[];
+
+  @IsString()
+  orderId: string;
 }
 
 export class PaymentSessionItems {

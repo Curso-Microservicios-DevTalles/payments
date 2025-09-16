@@ -1,14 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { envs } from 'src/config';
 import Stripe from 'stripe';
-import { PaymentSesionDto } from './dto/payment-session.dto';
+import { PaymentSessionDto } from './dto/payment-session.dto';
+import { Request, Response } from 'express';
 
 @Injectable()
 export class PaymentsService {
   private readonly stripe = new Stripe(envs.stripeSecret);
 
-  async createPaymentSession(paymentSessionDto: PaymentSesionDto) {
-    const { currency, items } = paymentSessionDto;
+  async createPaymentSession(paymentSessionDto: PaymentSessionDto) {
+    const { currency, items, orderId } = paymentSessionDto;
 
     const lineItems = items.map((item) => {
       return {
@@ -26,7 +27,9 @@ export class PaymentsService {
     const session = await this.stripe.checkout.sessions.create({
       // colocar aquí el ID de la orden
       payment_intent_data: {
-        metadata: {},
+        metadata: {
+          orderId,
+        },
       },
       line_items: lineItems,
       mode: 'payment',
@@ -35,5 +38,39 @@ export class PaymentsService {
     });
 
     return session;
+  }
+
+  async stripeWebhook(req: Request, res: Response) {
+    const sig = req.headers['stripe-signature'];
+
+    let event: Stripe.Event;
+
+    const endpointSecret = 'whsec_cSQrTWinVBayilAzRDf9j7gLEp6i0eCm';
+
+    try {
+      event = this.stripe.webhooks.constructEvent(
+        req['rawBody'],
+        sig as string,
+        endpointSecret,
+      );
+    } catch (error) {
+      res.status(400).send(`Webhook Error: ${error.message}`);
+      return;
+    }
+
+    switch (event.type) {
+      case 'charge.succeeded':
+        const chargeSucceeded = event.data.object;
+        // TODO: call microservice
+        console.log({
+          orderId: chargeSucceeded.metadata.orderId,
+        });
+        break;
+
+      default:
+        console.log('Evento no manejado');
+    }
+
+    return res.status(200).json({ sig });
   }
 }
